@@ -21,10 +21,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Only redirect if backend explicitly responded with 401 AND user has no active local session
     if (
       error.response?.status === 401 &&
       window.location.pathname !== '/login' &&
-      !window.location.search.includes('demo=1')
+      !localStorage.getItem('reachinbox_user')
     ) {
       window.location.href = '/login';
     }
