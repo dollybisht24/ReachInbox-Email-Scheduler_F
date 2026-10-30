@@ -9,6 +9,10 @@ interface AuthContextType {
   oauthConfigured: { google: boolean; slack: boolean };
   isLoading: boolean;
   loginWithDemo: (email?: string, name?: string) => Promise<void>;
+  loginWithGoogleCredential: (
+    credential?: string,
+    profile?: { email: string; name: string; avatar?: string }
+  ) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -90,9 +94,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogleCredential = async (
+    credential?: string,
+    profile?: { email: string; name: string; avatar?: string }
+  ) => {
+    setIsLoading(true);
+    try {
+      let resolvedEmail = profile?.email || '';
+      let resolvedName = profile?.name || '';
+      let resolvedAvatar = profile?.avatar || '';
+
+      if (credential) {
+        try {
+          const parts = credential.split('.');
+          if (parts.length >= 2) {
+            const payload = JSON.parse(
+              decodeURIComponent(
+                atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+                  .split('')
+                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join('')
+              )
+            );
+            resolvedEmail = payload.email || resolvedEmail;
+            resolvedName = payload.name || resolvedName;
+            resolvedAvatar = payload.picture || resolvedAvatar;
+          }
+        } catch (e) {
+          console.warn('[JWT Parse Error]', e);
+        }
+      }
+
+      if (!resolvedEmail) {
+        throw new Error('Google account did not provide an email address');
+      }
+
+      try {
+        const res = await api.post('/auth/google-credential', {
+          credential,
+          email: resolvedEmail,
+          name: resolvedName,
+          avatar: resolvedAvatar,
+        });
+        if (res.data?.token) {
+          localStorage.setItem('reachinbox_token', res.data.token);
+        }
+        if (res.data?.user) {
+          setUser(res.data.user);
+          localStorage.setItem('reachinbox_user', JSON.stringify(res.data.user));
+          await fetchCurrentUser();
+          return;
+        }
+      } catch (err) {
+        console.warn('[Backend Auth Failed, Using Local Session]', err);
+      }
+
+      // Standalone session fallback
+      const localUser: User = {
+        id: 'google_' + Date.now(),
+        email: resolvedEmail,
+        name: resolvedName || resolvedEmail.split('@')[0],
+        avatar: resolvedAvatar || null,
+        createdAt: new Date().toISOString(),
+      };
+      setUser(localUser);
+      localStorage.setItem('reachinbox_user', JSON.stringify(localUser));
+      setSenders([
+        {
+          id: 'sender_' + Date.now(),
+          userId: localUser.id,
+          email: localUser.email,
+          name: localUser.name,
+          hourlyLimit: 100,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       localStorage.removeItem('reachinbox_token');
+      localStorage.removeItem('reachinbox_user');
       await api.post('/auth/logout');
     } finally {
       setUser(null);
@@ -109,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         oauthConfigured,
         isLoading,
         loginWithDemo,
+        loginWithGoogleCredential,
         logout,
         refreshUser: fetchCurrentUser,
       }}

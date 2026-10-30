@@ -48,6 +48,9 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          {/* Fallback routes for direct /auth/google navigation on static hosts */}
+          <Route path="/auth/google" element={<Navigate to="/login?autogoogle=1" replace />} />
+          <Route path="/auth/google/callback" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>

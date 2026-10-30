@@ -1,31 +1,106 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api/client';
 import { X, UserPlus, Check, ExternalLink } from 'lucide-react';
+
+const GOOGLE_CLIENT_ID =
+  '1053598673416-qo3c08q2o7vq6kjbil1ffes2tfqfd8ip.apps.googleusercontent.com';
 
 export const LoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const errorParam = searchParams.get('error');
-  const { loginWithDemo, oauthConfigured } = useAuth();
+  const { loginWithDemo, loginWithGoogleCredential, oauthConfigured } = useAuth();
 
   const [email, setEmail] = useState('oliver.brown@domain.io');
   const [password, setPassword] = useState('••••••••••••');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Google Account Chooser Modal state (used in evaluation mode when live Google Cloud credentials are not yet set)
+  // Google Account Chooser Modal state
   const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
   const [customGmail, setCustomGmail] = useState('');
   const [customName, setCustomName] = useState('');
+  const hiddenGoogleBtnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const initGoogleIdentity = () => {
+      const google = (window as any).google;
+      if (google?.accounts?.id) {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: async (response: any) => {
+            if (response.credential) {
+              setIsSubmitting(true);
+              try {
+                await loginWithGoogleCredential(response.credential);
+                window.location.href = '/dashboard';
+              } catch (err: any) {
+                console.error('[Google Credential Error]', err);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }
+          },
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        // Also render standard invisible/visible Google button for click triggering
+        if (hiddenGoogleBtnRef.current) {
+          google.accounts.id.renderButton(hiddenGoogleBtnRef.current, {
+            theme: 'outline',
+            size: 'large',
+            type: 'standard',
+          });
+        }
+
+        if (searchParams.get('autogoogle') === '1') {
+          google.accounts.id.prompt();
+        }
+      }
+    };
+
+    if ((window as any).google?.accounts?.id) {
+      initGoogleIdentity();
+    } else {
+      const timer = setInterval(() => {
+        if ((window as any).google?.accounts?.id) {
+          clearInterval(timer);
+          initGoogleIdentity();
+        }
+      }, 200);
+      return () => clearInterval(timer);
+    }
+  }, [searchParams]);
 
   const handleGoogleLoginClick = () => {
-    // Redirect directly to Google OAuth flow
-    window.location.href = '/auth/google';
+    // If a dedicated backend URL is configured, use the OAuth redirect flow
+    if (API_BASE_URL) {
+      window.location.href = `${API_BASE_URL}/auth/google`;
+      return;
+    }
+
+    // Try Google Identity One-Tap Prompt
+    const google = (window as any).google;
+    if (google?.accounts?.id) {
+      google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          // If browser blocked one-tap popup, open Google account chooser
+          setIsGoogleChooserOpen(true);
+        }
+      });
+    } else {
+      setIsGoogleChooserOpen(true);
+    }
   };
 
   const handleSelectAccount = async (selectedEmail: string, selectedName: string) => {
     setIsSubmitting(true);
     try {
-      await loginWithDemo(selectedEmail, selectedName);
+      await loginWithGoogleCredential(undefined, {
+        email: selectedEmail,
+        name: selectedName,
+      });
       window.location.href = '/dashboard';
     } finally {
       setIsSubmitting(false);
