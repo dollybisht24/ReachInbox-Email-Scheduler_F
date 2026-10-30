@@ -74,24 +74,22 @@ export const LoginPage: React.FC = () => {
   }, [searchParams]);
 
   const handleGoogleLoginClick = () => {
-    // If a dedicated backend URL is configured, use the OAuth redirect flow
-    if (API_BASE_URL) {
-      window.location.href = `${API_BASE_URL}/auth/google`;
-      return;
-    }
-
     // Try Google Identity One-Tap Prompt
     const google = (window as any).google;
     if (google?.accounts?.id) {
-      google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // If browser blocked one-tap popup, open Google account chooser
-          setIsGoogleChooserOpen(true);
-        }
-      });
-    } else {
-      setIsGoogleChooserOpen(true);
+      try {
+        google.accounts.id.prompt((notification: any) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            setIsGoogleChooserOpen(true);
+          }
+        });
+      } catch {
+        setIsGoogleChooserOpen(true);
+      }
     }
+
+    // Always open chooser modal immediately so user is never stuck
+    setIsGoogleChooserOpen(true);
   };
 
   const handleSelectAccount = async (selectedEmail: string, selectedName: string) => {
@@ -239,14 +237,34 @@ export const LoginPage: React.FC = () => {
 
             {/* Account List */}
             <div className="p-4 space-y-2">
-              {/* Option 1: Oliver Brown (Figma Demo Account) */}
+              {/* Option 1: Dolly Bisht (Current Google Account) */}
+              <button
+                type="button"
+                onClick={() => handleSelectAccount('dollybisht408@gmail.com', 'Dolly Bisht')}
+                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-blue-50/50 border border-slate-200/80 hover:border-blue-300 transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-[#1a73e8] font-bold flex items-center justify-center text-sm shadow-xs">
+                    DB
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Dolly Bisht</div>
+                    <div className="text-xs text-slate-500">dollybisht408@gmail.com</div>
+                  </div>
+                </div>
+                <span className="text-xs text-[#1a73e8] font-medium bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200/60">
+                  Your Account
+                </span>
+              </button>
+
+              {/* Option 2: Oliver Brown (Figma Demo Account) */}
               <button
                 type="button"
                 onClick={() => handleSelectAccount('oliver.brown@domain.io', 'Oliver Brown')}
-                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors text-left"
+                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-emerald-50/50 border border-slate-200/80 hover:border-emerald-300 transition-colors text-left"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-[#00A651] font-bold flex items-center justify-center text-sm">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-[#00A651] font-bold flex items-center justify-center text-sm shadow-xs">
                     OB
                   </div>
                   <div>
@@ -254,12 +272,12 @@ export const LoginPage: React.FC = () => {
                     <div className="text-xs text-slate-500">oliver.brown@domain.io</div>
                   </div>
                 </div>
-                <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">
+                <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/60">
                   Figma Default
                 </span>
               </button>
 
-              {/* Option 2: Enter custom Gmail address */}
+              {/* Option 3: Enter custom Gmail address */}
               <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
                 <div className="flex items-center space-x-2 text-xs font-semibold text-slate-700">
                   <UserPlus className="w-4 h-4 text-slate-500" />
@@ -289,17 +307,28 @@ export const LoginPage: React.FC = () => {
                         customName.trim() || customGmail.split('@')[0]
                       )
                     }
-                    className="w-full py-2 bg-[#00A651] hover:bg-[#009245] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                    className="w-full py-2 bg-[#00A651] hover:bg-[#009245] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Authenticate with this Gmail
                   </button>
                 </div>
               </div>
+
+              {/* Option 4: Direct Google OAuth 2.0 Redirect */}
+              <div className="pt-1">
+                <a
+                  href="/auth/google"
+                  className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-lg border border-slate-200 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Launch Google accounts.google.com OAuth</span>
+                </a>
+              </div>
             </div>
 
             {/* Live OAuth Configuration Notice */}
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-500 leading-relaxed">
-              <span className="font-semibold text-slate-700">Live OAuth Notice:</span> To connect directly to Google's hosted login screen (<code className="text-slate-700 font-mono">accounts.google.com</code>), provide <code className="text-slate-700 font-mono">GOOGLE_CLIENT_ID</code> and <code className="text-slate-700 font-mono">GOOGLE_CLIENT_SECRET</code> in your root <code className="text-slate-700 font-mono">.env</code> file.
+              <span className="font-semibold text-slate-700">Google OAuth Setup:</span> If Google displays <code className="text-rose-600 font-mono">redirect_uri_mismatch</code>, add <code className="text-slate-800 font-mono">http://localhost:3000/auth/google/callback</code> to Authorized redirect URIs in Google Cloud Console.
             </div>
           </div>
         </div>
